@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Relevé Frigos</title>
+<meta name="theme-color" content="#1f3a5f">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌡️</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f3f5f8; --card:#ffffff; --ink:#18212b; --muted:#6a7684; --line:#dde3ea;
+  --brand:#1f3a5f; --brand-ink:#ffffff; --ok:#1e8e4e; --ok-bg:#e6f5ec;
+  --bad:#c62828; --bad-bg:#fdecec; --warn:#b26a00; --input:#f7f9fb;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f141a; --card:#18202a; --ink:#e8edf2; --muted:#93a0ae; --line:#2a3542;
+    --brand:#2d5a8c; --brand-ink:#ffffff; --ok:#4cc27e; --ok-bg:#16301f;
+    --bad:#ff6b6b; --bad-bg:#3a1a1a; --warn:#f0a840; --input:#121921;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --card:#18202a; --ink:#e8edf2; --muted:#93a0ae; --line:#2a3542;
+  --brand:#2d5a8c; --brand-ink:#ffffff; --ok:#4cc27e; --ok-bg:#16301f;
+  --bad:#ff6b6b; --bad-bg:#3a1a1a; --warn:#f0a840; --input:#121921;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding-bottom:80px}
+header{background:var(--brand);color:var(--brand-ink);padding:14px 16px 12px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:18px}
+header .date{font-size:14px;opacity:.9;text-transform:capitalize;margin-top:2px}
+.wrap{max-width:760px;margin:0 auto;padding:14px 16px}
+.wrap.wide{max-width:1180px}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:5;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:12px 4px;font-size:13px;color:var(--muted);cursor:pointer}
+nav button.on{color:var(--brand);font-weight:700}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) nav button.on{color:#8fbaf0}}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.bar label{font-size:13px;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--input);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--brand);outline-offset:0}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
+.btn.primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.btn.danger{color:var(--bad)}
+.progress{font-size:13px;color:var(--muted);margin:-4px 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:8px}
+.card-h b{font-size:16px}
+.range{font-size:12px;color:var(--muted);white-space:nowrap}
+.row{display:grid;grid-template-columns:60px 96px 1fr;gap:8px;align-items:center;padding:6px 0;border-top:1px dashed var(--line)}
+.row:first-of-type{border-top:0}
+.row .slot{font-weight:600;font-size:14px}
+.row input.temp{width:96px;text-align:center;font-size:17px;font-weight:600}
+.status{font-size:13px}
+.status.ok{color:var(--ok)}
+.status.bad{color:var(--bad);font-weight:700}
+.status.todo{color:var(--muted)}
+.meta{grid-column:2 / 4;font-size:12px;color:var(--muted)}
+.action{grid-column:1 / 4}
+.action textarea{width:100%;min-height:54px;border-color:var(--bad);background:var(--bad-bg)}
+.action .lbl{font-size:12px;color:var(--bad);font-weight:600;margin-bottom:4px}
+.card.alert{border-color:var(--bad)}
+table{width:100%;border-collapse:collapse;background:var(--card);font-size:13px}
+th,td{border:1px solid var(--line);padding:6px;text-align:center}
+th{background:var(--input);font-weight:600}
+td.l{text-align:left}
+td.bad{background:var(--bad-bg);color:var(--bad);font-weight:700}
+td.empty{color:var(--muted)}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--input)}
+tr.we td:first-child{color:var(--muted)}
+.tblwrap{overflow-x:auto;border-radius:8px}
+.legend{font-size:12px;color:var(--muted);margin-top:8px}
+.frow{display:grid;grid-template-columns:1fr 70px 70px auto;gap:6px;align-items:center;margin-bottom:8px}
+.frow input{width:100%;min-width:0}
+.hint{font-size:12px;color:var(--muted)}
+h2{font-size:16px;margin:4px 0 10px}
+#toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+#toast.show{opacity:1}
+table.grid{font-size:11px;table-layout:fixed;min-width:760px}
+table.grid th,table.grid td{padding:3px 0}
+table.grid th.dh,table.grid td.lv{width:62px;font-weight:600;font-size:11px}
+table.grid th.fr{background:var(--line);letter-spacing:.5px}
+table.grid td.g{height:20px;font-size:10px;font-weight:700}
+table.grid td.mark{background:var(--ok-bg);color:var(--ok)}
+table.grid td.mark.bad{background:var(--bad-bg);color:var(--bad)}
+table.grid td.vis{font-size:9px;color:var(--muted);font-weight:400}
+table.grid .click{cursor:pointer}
+td.z-ok{background:#2fb34a;color:#fff}
+td.z-mid{background:#f39200;color:#fff}
+td.z-bad{background:#e3141b;color:#fff}
+.act-h{background:#d9d2e9;color:#18212b}
+.printhead{display:none}
+@media print{ @page{size:A4 landscape;margin:10mm} table.grid{min-width:0} }
+@media print{
+  header,nav,.bar,.noprint,#toast{display:none!important}
+  body{background:#fff;color:#000;padding:0}
+  .printhead{display:block;margin-bottom:8px}
+  .view{display:none!important}
+  #v-fiche{display:block!important}
+  th,td{border-color:#999}
+  td.bad{background:#fdd;color:#900}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌡️ Relevé des températures</h1>
+  <div class="date" id="hdrDate"></div>
+</header>
+
+<main class="wrap">
+  <!-- RELEVÉ DU JOUR -->
+  <section class="view" id="v-today">
+    <div class="bar">
+      <label for="who">Relevé par</label>
+      <input id="who" placeholder="Initiales" maxlength="6" style="width:90px;text-transform:uppercase">
+      <input type="date" id="dayPick" style="margin-left:auto">
+      <button class="btn" id="btnToday">Aujourd'hui</button>
+    </div>
+    <div class="progress" id="progress"></div>
+    <div id="cards"></div>
+  </section>
+
+  <!-- FICHES -->
+  <section class="view" id="v-fiche" hidden>
+    <div class="bar">
+      <select id="fFridge"></select>
+      <input type="month" id="fMonth">
+      <button class="btn" onclick="window.print()">Imprimer / PDF</button>
+      <button class="btn primary" id="btnXlsx">Export Excel</button>
+    </div>
+    <div class="printhead" id="printHead"></div>
+    <div class="tblwrap"><table id="ficheTbl" class="grid"></table></div>
+    <div class="tblwrap" style="margin-top:14px"><table id="actTbl"></table></div>
+    <div class="legend noprint">Touchez un numéro de jour ou une valeur pour ouvrir ou corriger le relevé. Valeur rouge = hors limites. * = valeur modifiée (historique conservé, visible au survol).</div>
+    <div class="printhead legend">Chaque jour, à la première ouverture des portes, contrôler la température du frigo.</div>
+  </section>
+
+  <!-- RÉGLAGES -->
+  <section class="view" id="v-set" hidden>
+    <h2>Mes frigos</h2>
+    <div class="frow hint"><span>Nom</span><span>Min °C</span><span>Max °C</span><span></span></div>
+    <div id="fList"></div>
+    <button class="btn primary" id="btnAdd">+ Ajouter un frigo</button>
+    <p class="hint">Seuils usuels : produits sensibles 0 à +4 °C · poisson frais 0 à +2 °C · surgelés −25 à −18 °C.</p>
+
+    <h2 style="margin-top:24px">Sauvegarde</h2>
+    <p class="hint">Les données sont enregistrées sur cet appareil uniquement. Faites une sauvegarde régulière, et utilisez toujours le même téléphone/tablette pour les relevés.</p>
+    <div class="bar">
+      <button class="btn" id="btnBackup">Télécharger une sauvegarde</button>
+      <label class="btn" style="color:var(--ink)">Restaurer<input type="file" id="fileRestore" accept=".json" hidden></label>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-v="today" class="on">📝 Relevé</button>
+  <button data-v="fiche">📋 Fiches</button>
+  <button data-v="set">⚙️ Frigos</button>
+</nav>
+<div id="toast"></div>
+
+<script>
+const KEY = 'releve-frigos-v1';
+const SLOTS = [['releve','Relevé']]; // 1 relevé/jour, à la 1re ouverture des portes
+const uid = () => Math.random().toString(36).slice(2,9);
+const pad = n => String(n).padStart(2,'0');
+const keyOf = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayKey = () => keyOf(new Date());
+const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y,m-1,d); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hhmm = iso => { const d = new Date(iso); return pad(d.getHours())+':'+pad(d.getMinutes()); };
+const fmtT = v => (v === '' || v == null) ? '' : String(v).replace('.', ',');
+
+function load(){
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && Array.isArray(s.fridges)) return s; } catch(e){}
+  return { fridges:[
+    {id:uid(), name:'Frigo 1', min:0, max:4},
+    {id:uid(), name:'Frigo 2', min:0, max:4}
+  ], entries:{}, by:'' };
+}
+let S = load();
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast('⚠️ Sauvegarde impossible sur cet appareil'); } }
+
+let toastT;
+function toast(msg){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 2200); }
+
+/* ---------- Date du jour automatique ---------- */
+let curDay = todayKey();
+let followToday = true;          // tant qu'on n'a pas choisi un autre jour, on suit la date réelle
+let lastSeenToday = todayKey();
+
+function checkDayRollover(){
+  const t = todayKey();
+  if (t !== lastSeenToday){
+    lastSeenToday = t;
+    if (followToday){ curDay = t; renderToday(); toast('Nouvelle journée : ' + t.split('-').reverse().join('/')); }
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDayRollover(); });
+window.addEventListener('focus', checkDayRollover);
+setInterval(checkDayRollover, 60000);
+
+/* ---------- Statuts ---------- */
+const isOut = (f, t) => t !== '' && t != null && (Number(t) > Number(f.max) || Number(t) < Number(f.min));
+const getE = (day, fid, slot) => S.entries[day]?.[fid]?.[slot];
+
+/* ---------- Vue Relevé ---------- */
+function renderToday(){
+  const d = parseKey(curDay);
+  const isToday = curDay === todayKey();
+  document.getElementById('hdrDate').textContent =
+    d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + (isToday ? '' : '  (jour passé)');
+  document.getElementById('dayPick').value = curDay;
+  document.getElementById('btnToday').style.display = isToday ? 'none' : '';
+
+  let done = 0, total = S.fridges.length * SLOTS.length, alerts = 0;
+  const html = S.fridges.map(f => {
+    let cardAlert = false;
+    const rows = SLOTS.map(([s, label]) => {
+      const e = getE(curDay, f.id, s);
+      const has = e && e.t !== '' && e.t != null;
+      if (has) done++;
+      const out = has && isOut(f, e.t);
+      if (out){ cardAlert = true; alerts++; }
+      let status = '<span class="status todo">À relever</span>';
+      if (has) status = out ? '<span class="status bad">⚠️ Hors limites</span>' : '<span class="status ok">✓ Conforme</span>';
+      let meta = '';
+      if (has){
+        meta = 'par ' + esc(e.by) + ' à ' + hhmm(e.at);
+        if (e.edits && e.edits.length){
+          const last = e.edits[e.edits.length-1];
+          meta += ' · modifié par ' + esc(last.by) + ' à ' + hhmm(last.at) + ' (avant : ' + fmtT(last.old) + ' °C)';
+        }
+      }
+      const action = out ? `<div class="action"><div class="lbl">Action corrective obligatoire</div>
+        <textarea data-f="${f.id}" data-s="${s}" data-k="action" placeholder="Ex : porte mal fermée, réglage thermostat, produits déplacés, nouveau contrôle à…">${esc(e.action||'')}</textarea></div>` : '';
+      return `<div class="row">
+        <span class="slot">${label}</span>
+        <input class="temp" type="text" inputmode="decimal" placeholder="°C" data-f="${f.id}" data-s="${s}" data-k="t" value="${has ? fmtT(e.t) : ''}">
+        ${status}
+        ${meta ? `<div class="meta">${meta}</div>` : ''}
+        ${action}
+      </div>`;
+    }).join('');
+    return `<div class="card ${cardAlert?'alert':''}">
+      <div class="card-h"><b>${esc(f.name)}</b><span class="range">${fmtT(f.min)} à ${fmtT(f.max)} °C</span></div>
+      ${rows}</div>`;
+  }).join('');
+  document.getElementById('cards').innerHTML = html || '<p class="hint">Aucun frigo. Ajoutez-les dans l\'onglet ⚙️ Frigos.</p>';
+  document.getElementById('progress').textContent =
+    `${done}/${total} relevés faits` + (alerts ? ` · ⚠️ ${alerts} hors limites` : '');
+}
+
+document.getElementById('cards').addEventListener('change', ev => {
+  const el = ev.target; const fid = el.dataset.f, s = el.dataset.s, k = el.dataset.k;
+  if (!fid) return;
+  const by = (S.by || '').trim().toUpperCase();
+  if (!by){ toast('Indique d\'abord tes initiales'); document.getElementById('who').focus(); renderToday(); return; }
+  S.entries[curDay] ??= {}; S.entries[curDay][fid] ??= {};
+  const now = new Date().toISOString();
+  let e = S.entries[curDay][fid][s];
+
+  if (k === 't'){
+    const raw = el.value.trim().replace(',', '.');
+    if (raw === ''){ renderToday(); return; }
+    const v = Number(raw);
+    if (!isFinite(v) || v < -40 || v > 40){ toast('Température invalide'); renderToday(); return; }
+    if (!e){ e = S.entries[curDay][fid][s] = { t:v, by, at:now, edits:[] }; }
+    else if (Number(e.t) !== v){ e.edits ??= []; e.edits.push({ old:e.t, nw:v, by, at:now }); e.t = v; }
+    const f = S.fridges.find(x => x.id === fid);
+    toast(isOut(f, v) ? '⚠️ Hors limites : note l\'action corrective' : '✓ Enregistré');
+  } else if (k === 'action' && e){
+    e.action = el.value.trim();
+    toast('Action corrective enregistrée');
+  }
+  save(); renderToday();
+  if (k === 't'){ // focus sur le champ suivant pour enchaîner vite
+    const inputs = [...document.querySelectorAll('#cards input.temp')];
+    const i = inputs.findIndex(x => x.dataset.f === fid && x.dataset.s === s);
+    const next = inputs.slice(i+1).find(x => !x.value);
+    if (next) next.focus();
+  }
+});
+
+const who = document.getElementById('who');
+who.value = S.by || '';
+who.addEventListener('input', () => { S.by = who.value.trim().toUpperCase(); save(); });
+
+document.getElementById('dayPick').addEventListener('change', e => {
+  if (!e.target.value) return;
+  curDay = e.target.value; followToday = curDay === todayKey(); renderToday();
+});
+document.getElementById('btnToday').addEventListener('click', () => { curDay = todayKey(); followToday = true; renderToday(); });
+
+/* ---------- Vue Fiches ---------- */
+const fFridge = document.getElementById('fFridge'), fMonth = document.getElementById('fMonth');
+fMonth.value = todayKey().slice(0,7);
+
+function daysOfMonth(ym){
+  const [y,m] = ym.split('-').map(Number); const n = new Date(y, m, 0).getDate();
+  return Array.from({length:n}, (_,i) => y+'-'+pad(m)+'-'+pad(i+1));
+}
+function renderFiche(){
+  const cur = fFridge.value;
+  fFridge.innerHTML = S.fridges.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('');
+  if (cur && S.fridges.some(f => f.id === cur)) fFridge.value = cur;
+  const f = S.fridges.find(x => x.id === fFridge.value);
+  const tbl = document.getElementById('ficheTbl');
+  if (!f || !fMonth.value){ tbl.innerHTML = ''; return; }
+  const monthLbl = parseKey(fMonth.value+'-01').toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  document.getElementById('printHead').innerHTML =
+    `<h2>Relevé de température : ${esc(f.name)}</h2><div>Mois : ${monthLbl} · Limites : ${fmtT(f.min)} à ${fmtT(f.max)} °C</div>`;
+  const tk = todayKey();
+  const days = daysOfMonth(fMonth.value);
+  const s = SLOTS[0][0];
+  // Lignes de température (comme la fiche papier) : du haut (max+8) jusqu'au min
+  const top = Math.round(f.max) + 8, bottom = Math.round(f.min);
+  const levels = []; for (let t = top; t >= bottom; t--) levels.push(t);
+  const zone = t => t <= f.max && t >= f.min ? 'z-ok' : (t <= f.max + 3 && t > f.max ? 'z-mid' : 'z-bad');
+  const label = (t, i) => i === 0 ? `≥ ${t} °C` : (i === levels.length - 1 ? `≤ ${t} °C` : `${t} °C`);
+  const bucket = v => { const r = Math.round(Number(v)); return Math.max(bottom, Math.min(top, r)); };
+
+  let h = `<tr><th class="dh">DATES</th>${days.map((d,i) => {
+    const day = d; const fut = day > tk;
+    return `<th class="${fut?'':'click'}" data-day="${fut?'':day}">${i+1}</th>`;
+  }).join('')}</tr>`;
+  h += `<tr><th colspan="${days.length+1}" class="fr">${esc(f.name).toUpperCase()}</th></tr>`;
+  levels.forEach((lv, i) => {
+    h += `<tr><td class="lv ${zone(lv)}">${label(lv, i)}</td>${days.map(day => {
+      const e = getE(day, f.id, s);
+      if (!e || e.t === '' || e.t == null || bucket(e.t) !== lv) return `<td class="g"></td>`;
+      const out = isOut(f, e.t); const edited = e.edits && e.edits.length;
+      const tip = `${fmtT(e.t)} °C · ${e.by} à ${hhmm(e.at)}` + (edited ? '\n' + e.edits.map(x => `modifié ${fmtT(x.old)}→${fmtT(x.nw)} par ${x.by} le ${new Date(x.at).toLocaleString('fr-FR')}`).join('\n') : '');
+      return `<td class="g mark ${out?'bad':''} click" data-day="${day}" title="${esc(tip)}">${fmtT(e.t)}${edited?'*':''}</td>`;
+    }).join('')}</tr>`;
+  });
+  h += `<tr><td class="lv">Visa</td>${days.map(day => { const e = getE(day, f.id, s); return `<td class="g vis">${e ? esc(e.by) : ''}</td>`; }).join('')}</tr>`;
+  tbl.innerHTML = h;
+
+  // Tableau des actions correctives
+  const acts = days.map(day => ({ day, e:getE(day, f.id, s) })).filter(x => x.e && (x.e.action || isOut(f, x.e.t)));
+  document.getElementById('actTbl').innerHTML =
+    `<tr><th colspan="2" class="act-h">ACTIONS CORRECTIVES</th></tr><tr><th style="width:110px">DATES</th><th>MESURES PRISES</th></tr>` +
+    (acts.length ? acts.map(x => `<tr class="click" data-day="${x.day}"><td>${x.day.split('-').reverse().join('/')}</td><td class="l">${fmtT(x.e.t)} °C : ${x.e.action ? esc(x.e.action) : '<span style="color:var(--bad)">à compléter</span>'}</td></tr>`).join('')
+      : `<tr><td>&nbsp;</td><td></td></tr><tr><td>&nbsp;</td><td></td></tr>`);
+}
+fFridge.addEventListener('change', renderFiche);
+fMonth.addEventListener('change', renderFiche);
+['ficheTbl','actTbl'].forEach(id => document.getElementById(id).addEventListener('click', ev => {
+  const el = ev.target.closest('[data-day]'); if (!el || !el.dataset.day) return;
+  curDay = el.dataset.day; followToday = curDay === todayKey(); show('today');
+}));
+
+/* ---------- Export Excel ---------- */
+document.getElementById('btnXlsx').addEventListener('click', () => {
+  const ym = fMonth.value; if (!ym) return;
+  const days = daysOfMonth(ym);
+  const sheets = S.fridges.map(f => {
+    const rows = [[`Relevé de température : ${f.name}`], [`Mois : ${ym}`, `Limites : ${f.min} à ${f.max} °C`], [],
+      ['Date', ...SLOTS.flatMap(([,l]) => [`${l} °C`, `${l} heure`, `${l} visa`]), 'Hors limites', 'Action corrective', 'Modifications']];
+    for (const day of days){
+      const r = [day.split('-').reverse().join('/')]; let out = false; const act = [], mods = [];
+      for (const [s] of SLOTS){
+        const e = getE(day, f.id, s);
+        if (e && e.t !== '' && e.t != null){
+          r.push(Number(e.t), hhmm(e.at), e.by);
+          if (isOut(f, e.t)) out = true;
+          if (e.action) act.push(e.action);
+          (e.edits||[]).forEach(x => mods.push(`${s}: ${x.old}→${x.nw} par ${x.by} ${new Date(x.at).toLocaleString('fr-FR')}`));
+        } else r.push('', '', '');
+      }
+      r.push(out ? 'OUI' : '', act.join(' / '), mods.join(' | '));
+      rows.push(r);
+    }
+    return { name: f.name, rows };
+  });
+  const fname = `releves-frigos-${ym}`;
+  if (window.XLSX){
+    const wb = XLSX.utils.book_new(); const used = new Set();
+    sheets.forEach(sh => {
+      let n = sh.name.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31) || 'Frigo';
+      while (used.has(n)) n = n.slice(0, 28) + '_' + used.size; used.add(n);
+      const ws = XLSX.utils.aoa_to_sheet(sh.rows);
+      ws['!cols'] = [{wch:12}, ...SLOTS.flatMap(() => [{wch:9},{wch:8},{wch:7}]), {wch:11},{wch:40},{wch:50}];
+      XLSX.utils.book_append_sheet(wb, ws, n);
+    });
+    XLSX.writeFile(wb, fname + '.xlsx');
+  } else {
+    const csv = sheets.flatMap(sh => [...sh.rows, []]).map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+    download(fname + '.csv', '\ufeff' + csv, 'text/csv');
+  }
+});
+
+function download(name, content, type){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], {type}));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ---------- Réglages ---------- */
+function renderSet(){
+  document.getElementById('fList').innerHTML = S.fridges.map((f, i) => `
+    <div class="frow">
+      <input data-i="${i}" data-k="name" value="${esc(f.name)}">
+      <input data-i="${i}" data-k="min" inputmode="decimal" value="${fmtT(f.min)}">
+      <input data-i="${i}" data-k="max" inputmode="decimal" value="${fmtT(f.max)}">
+      <button class="btn danger" data-del="${i}" title="Supprimer">✕</button>
+    </div>`).join('');
+}
+document.getElementById('fList').addEventListener('change', ev => {
+  const el = ev.target; const i = el.dataset.i; if (i == null) return;
+  const f = S.fridges[i];
+  if (el.dataset.k === 'name') f.name = el.value.trim() || f.name;
+  else { const v = Number(el.value.replace(',', '.')); if (isFinite(v)) f[el.dataset.k] = v; }
+  save(); renderSet(); toast('Enregistré');
+});
+document.getElementById('fList').addEventListener('click', ev => {
+  const i = ev.target.dataset.del; if (i == null) return;
+  if (!confirm(`Supprimer « ${S.fridges[i].name} » ? Ses relevés passés restent dans la sauvegarde mais ne seront plus affichés.`)) return;
+  S.fridges.splice(i, 1); save(); renderSet();
+});
+document.getElementById('btnAdd').addEventListener('click', () => {
+  S.fridges.push({ id:uid(), name:'Frigo ' + (S.fridges.length + 1), min:0, max:4 }); save(); renderSet();
+  const inputs = document.querySelectorAll('#fList input[data-k="name"]'); inputs[inputs.length-1].select();
+});
+document.getElementById('btnBackup').addEventListener('click', () => {
+  download(`sauvegarde-frigos-${todayKey()}.json`, JSON.stringify(S, null, 1), 'application/json');
+});
+document.getElementById('fileRestore').addEventListener('change', ev => {
+  const file = ev.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.fridges) || typeof d.entries !== 'object') throw 0;
+      if (!confirm('Remplacer les données actuelles par cette sauvegarde ?')) return;
+      S = d; save(); who.value = S.by || ''; renderSet(); toast('Sauvegarde restaurée');
+    } catch(e){ toast('Fichier invalide'); }
+  };
+  r.readAsText(file); ev.target.value = '';
+});
+
+/* ---------- Navigation ---------- */
+function show(v){
+  document.querySelectorAll('.view').forEach(x => x.hidden = x.id !== 'v-' + v);
+  document.querySelector('main').classList.toggle('wide', v === 'fiche');
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  if (v === 'today') renderToday(); if (v === 'fiche') renderFiche(); if (v === 'set') renderSet();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.v === 'today'){ curDay = todayKey(); followToday = true; }
+  show(b.dataset.v);
+}));
+
+show('today');
+</script>
+</body>
+</html>
